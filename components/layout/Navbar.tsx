@@ -1,11 +1,62 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import Button from "@/components/ui/Button";
+import { supabase } from "@/lib/supabase";
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    // Step 11 — Check session on mount and log data.session
+    const checkAuthStatus = async () => {
+      const { data } = await supabase.auth.getSession();
+      console.log("Supabase session:", data.session);
+
+      const localToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      setIsLoggedIn(!!data?.session || !!localToken);
+    };
+
+    checkAuthStatus();
+
+    // Subscribe to auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth State Changed:", event, session);
+      setIsLoggedIn(!!session);
+      if (!session) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("name");
+        localStorage.removeItem("email");
+      }
+    });
+
+    window.addEventListener("auth-change", checkAuthStatus);
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+      window.removeEventListener("auth-change", checkAuthStatus);
+    };
+  }, []);
+
+  // Step 10 — Handle Logout Flow
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("name");
+      localStorage.removeItem("email");
+      window.dispatchEvent(new Event("auth-change"));
+    }
+
+    setIsLoggedIn(false);
+    router.push("/login");
+  };
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -48,13 +99,30 @@ export default function Navbar() {
           })}
         </nav>
 
-        {/* CTA Button */}
-        <Link
-          href="/interview/new"
-          className="hidden rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition-all hover:bg-indigo-700 sm:inline-block"
-        >
-          Start Practice
-        </Link>
+        {/* Right Action: Show Logout when Logged In, otherwise Show Login */}
+        <div className="flex items-center gap-3">
+          {isLoggedIn ? (
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              size="sm"
+              className="border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+            >
+              Logout
+            </Button>
+          ) : (
+            <Link href="/login">
+              <Button size="sm">Login</Button>
+            </Link>
+          )}
+
+          <Link
+            href="/interview/new"
+            className="hidden rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition-all hover:bg-indigo-700 sm:inline-block"
+          >
+            Start Practice
+          </Link>
+        </div>
       </div>
     </header>
   );

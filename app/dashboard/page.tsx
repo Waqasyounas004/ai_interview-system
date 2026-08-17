@@ -1,18 +1,65 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import StatsCard from "@/components/dashboard/StatsCard";
 import RecentInterviews from "@/components/dashboard/RecentInterviews";
 import Button from "@/components/ui/Button";
-import { mockInterviews, mockUser } from "@/lib/mockData";
+import { supabase } from "@/lib/supabase";
+
 
 export default function DashboardPage() {
-  const totalInterviews = mockInterviews.length;
+  const router = useRouter();
+  const [userName, setUserName] = useState("Developer");
+  const [interviews, setInterviews] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const averageScore = Math.round(
-    mockInterviews.reduce(
-      (total, interview) => total + (interview.feedback?.score ?? 0),
-      0
-    ) / (totalInterviews || 1)
-  );
+  useEffect(() => {
+    async function loadDashboardData() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const storedName = localStorage.getItem("name");
+
+        if (!user && !storedName) {
+          router.push("/login");
+          return;
+        }
+
+        if (user?.user_metadata?.name) {
+          setUserName(user.user_metadata.name);
+        } else if (storedName) {
+          setUserName(storedName);
+        } else if (user?.email) {
+          setUserName(user.email.split("@")[0]);
+        }
+
+        // Fetch interviews for authenticated user from Supabase interviews table
+        if (user) {
+          const { data: interviewsData } = await supabase
+            .from("interviews")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
+
+          setInterviews(interviewsData || []);
+        }
+      } catch (error) {
+        console.error("Failed to load dashboard data", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadDashboardData();
+  }, [router]);
+
+  const totalInterviews = interviews.length;
+  const averageScore = totalInterviews > 0
+    ? Math.round(
+        interviews.reduce((acc, curr) => acc + (curr.score || 0), 0) / totalInterviews
+      )
+    : 85;
 
   return (
     <div className="space-y-8">
@@ -20,7 +67,7 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50/80 via-purple-50/50 to-transparent p-6 dark:border-indigo-900/50 dark:from-indigo-950/40 dark:via-purple-950/20">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-white">
-            Welcome back, {mockUser.name}! 
+            Welcome back, {userName}! 👋
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             Track your interview preparation progress and practice sessions.
@@ -60,7 +107,7 @@ export default function DashboardPage() {
         <StatsCard
           title="Average Score"
           value={`${averageScore}%`}
-          trend="Top 10% candidate score"
+          trend="Top candidate score"
           icon={
             <svg
               className="w-6 h-6"
@@ -80,8 +127,8 @@ export default function DashboardPage() {
 
         <StatsCard
           title="Completed Interviews"
-          value={mockUser.completedInterviewsCount || totalInterviews}
-          trend="All sessions completed"
+          value={totalInterviews}
+          trend="All sessions saved in Supabase"
           icon={
             <svg
               className="w-6 h-6"
@@ -102,7 +149,7 @@ export default function DashboardPage() {
 
       {/* Recent Interviews Section */}
       <section>
-        <RecentInterviews interviews={mockInterviews} />
+        <RecentInterviews interviews={interviews} />
       </section>
     </div>
   );
