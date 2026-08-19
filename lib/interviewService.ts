@@ -412,6 +412,17 @@ export async function evaluateInterviewSession({
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
+        // Dual-sync score to Supabase via authenticated client session
+        await supabase
+          .from("interviews")
+          .update({
+            status: "completed",
+            score: typeof data.score === "number" ? data.score : 0,
+            overall_feedback: data.feedback,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", interviewId);
+
         return data;
       }
     }

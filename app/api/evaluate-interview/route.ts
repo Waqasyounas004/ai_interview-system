@@ -205,7 +205,7 @@ Provide an evaluation as a JSON object matching this schema:
     };
 
     // Update interview in Supabase
-    await supabase
+    const { data: updatedInt, error: updateErr } = await supabase
       .from("interviews")
       .update({
         status: "completed",
@@ -213,7 +213,14 @@ Provide an evaluation as a JSON object matching this schema:
         overall_feedback: overallFeedback,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", interviewId);
+      .eq("id", interviewId)
+      .select();
+
+    if (updateErr) {
+      console.error("❌ Supabase DB score update error in server route:", updateErr);
+    } else {
+      console.log("✅ Supabase DB score updated to:", evaluationResult.overall_score, updatedInt);
+    }
 
     // Trigger n8n Webhook Server-to-Server
     const strengthsList = (evaluationResult.strengths || []).map((s: string) => `• ${s}`).join("\n");
