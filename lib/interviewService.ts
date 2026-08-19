@@ -610,7 +610,7 @@ Provide an evaluation as a JSON object matching this schema:
       const storedEmail = typeof window !== "undefined" ? (localStorage.getItem("user_email") || localStorage.getItem("email")) : "";
       const storedName = typeof window !== "undefined" ? localStorage.getItem("name") : "";
 
-      const candidateEmail = user?.email || profileEmail || storedEmail || "waqasyounas292@gmail.com";
+      const candidateEmail = user?.email || profileEmail || storedEmail || "";
       const candidateName = user?.user_metadata?.name || profileName || storedName || (candidateEmail ? candidateEmail.split("@")[0] : "Candidate");
       const interviewRole = interviewRow?.role || "Software Engineer";
       const scoreVal = evaluationResult.overall_score;

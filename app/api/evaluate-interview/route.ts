@@ -170,7 +170,7 @@ Provide an evaluation as a JSON object matching this schema:
       .eq("id", interviewId)
       .maybeSingle();
 
-    let candidateEmail = "waqasyounas292@gmail.com";
+    let candidateEmail = "";
     let candidateName = "Candidate";
 
     if (interviewRow?.user_id) {
