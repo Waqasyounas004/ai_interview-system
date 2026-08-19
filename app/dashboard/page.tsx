@@ -7,7 +7,7 @@ import StatsCard from "@/components/dashboard/StatsCard";
 import RecentInterviews from "@/components/dashboard/RecentInterviews";
 import Button from "@/components/ui/Button";
 import { supabase } from "@/lib/supabase";
-import { extractInterviewScore } from "@/lib/utils";
+import { extractInterviewScore, repairAndExtractScore } from "@/lib/utils";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -42,7 +42,15 @@ export default function DashboardPage() {
             .eq("user_id", user.id)
             .order("created_at", { ascending: false });
 
-          setInterviews(interviewsData || []);
+          if (interviewsData) {
+            const repaired = await Promise.all(
+              interviewsData.map(async (item) => {
+                const s = await repairAndExtractScore(item, supabase);
+                return { ...item, score: s };
+              })
+            );
+            setInterviews(repaired);
+          }
         }
       } catch (error) {
         console.error("Failed to load dashboard data", error);

@@ -57,14 +57,55 @@ export function extractInterviewScore(interview: any): number {
   if (typeof interview.score === "number" && interview.score > 0) {
     return interview.score;
   }
-  if (typeof interview.overall_feedback?.score === "number") {
+  if (typeof interview.overall_feedback?.score === "number" && interview.overall_feedback.score > 0) {
     return interview.overall_feedback.score;
   }
-  if (typeof interview.feedback?.score === "number") {
+  if (typeof interview.feedback?.score === "number" && interview.feedback.score > 0) {
     return interview.feedback.score;
   }
   if (typeof interview.score === "number") {
     return interview.score;
   }
   return 0;
+}
+
+export async function repairAndExtractScore(interview: any, supabaseClient: any): Promise<number> {
+  const directScore = extractInterviewScore(interview);
+  if (directScore > 0) return directScore;
+
+  if (interview?.id && supabaseClient) {
+    try {
+      const { data: qRows } = await supabaseClient
+        .from("questions")
+        .select("question_score")
+        .eq("interview_id", interview.id);
+
+      if (qRows && qRows.length > 0) {
+        const validQuestionScores = qRows
+          .map((q: any) => Number(q.question_score))
+          .filter((s: number) => !isNaN(s) && s > 0);
+
+        if (validQuestionScores.length > 0) {
+          const calcAvg = Math.round(
+            validQuestionScores.reduce((a: number, b: number) => a + b, 0) / qRows.length
+          );
+
+          if (calcAvg > 0) {
+            // Repair database row asynchronously
+            supabaseClient
+              .from("interviews")
+              .update({ score: calcAvg, status: "completed" })
+              .eq("id", interview.id)
+              .then(() => {});
+
+            return calcAvg;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Score repair failed:", e);
+    }
+  }
+
+  return directScore;
 }

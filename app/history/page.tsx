@@ -8,7 +8,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Card from "@/components/ui/Card";
 import { supabase } from "@/lib/supabase";
-import { extractInterviewScore } from "@/lib/utils";
+import { extractInterviewScore, repairAndExtractScore } from "@/lib/utils";
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -36,23 +36,25 @@ export default function HistoryPage() {
             .eq("user_id", user.id)
             .order("created_at", { ascending: false });
 
-          const formatted = (data || []).map((item: any) => {
-            const itemScore = extractInterviewScore(item);
+          const formatted = await Promise.all(
+            (data || []).map(async (item: any) => {
+              const itemScore = await repairAndExtractScore(item, supabase);
 
-            return {
-              id: item.id,
-              title: item.title || `${item.role} Practice`,
-              role: item.role,
-              level: item.level || item.difficulty || "Medium",
-              date: item.created_at ? new Date(item.created_at).toLocaleDateString() : "Recent",
-              questionsCount: 5,
-              score: itemScore,
-              feedback: {
+              return {
+                id: item.id,
+                title: item.title || `${item.role} Practice`,
+                role: item.role,
+                level: item.level || item.difficulty || "Medium",
+                date: item.created_at ? new Date(item.created_at).toLocaleDateString() : "Recent",
+                questionsCount: 5,
                 score: itemScore,
-                summary: item.overall_feedback?.summary || "Completed technical interview practice.",
-              },
-            };
-          });
+                feedback: {
+                  score: itemScore,
+                  summary: item.overall_feedback?.summary || "Completed technical interview practice.",
+                },
+              };
+            })
+          );
           setInterviews(formatted);
         }
       } catch (error) {
