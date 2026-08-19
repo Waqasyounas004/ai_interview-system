@@ -12,26 +12,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Missing interviewId" }, { status: 400 });
     }
 
-    const authHeader = request.headers.get("authorization");
-    const authToken = authHeader ? authHeader.replace("Bearer ", "").trim() : "";
-
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const supabaseKey =
+    const serviceRoleKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
       "";
 
-    const supabase = createClient(
-      supabaseUrl,
-      supabaseKey,
-      authToken
-        ? {
-            global: {
-              headers: { Authorization: `Bearer ${authToken}` },
-            },
-          }
-        : undefined
-    );
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const groqKey =
       process.env.GROQ_API_KEY ||
@@ -147,12 +134,11 @@ Provide an evaluation as a JSON object matching this schema:
       evaluationResult.overall_score = Math.round(sumScores / evaluationResult.questionResults.length);
     }
 
-    // Update questions in Supabase
+    // Update / Insert questions in Supabase using admin client
     if (questions && questions.length > 0) {
       for (const q of questions) {
-        const qNum = q.question_number || q.number;
-        const key = q.id || String(qNum);
-        const userAns = getAnswerForQuestion(q, (qNum || 1) - 1, answers);
+        const qNum = q.question_number || q.number || 1;
+        const userAns = getAnswerForQuestion(q, qNum - 1, answers);
 
         const defaultQScore = isNonAnswer(userAns) ? 0 : 70;
         const defaultFeedback = isNonAnswer(userAns)
@@ -163,15 +149,29 @@ Provide an evaluation as a JSON object matching this schema:
           (res: any) => res.question_number === qNum
         ) || { question_score: defaultQScore, ai_feedback: defaultFeedback };
 
+        const finalQScore = typeof qResult.question_score === "number" ? qResult.question_score : defaultQScore;
+
         if (q.id && !q.id.startsWith("q")) {
           await supabase
             .from("questions")
             .update({
               user_answer: userAns,
-              question_score: typeof qResult.question_score === "number" ? qResult.question_score : defaultQScore,
+              question_score: finalQScore,
               ai_feedback: qResult.ai_feedback || defaultFeedback,
             })
             .eq("id", q.id);
+        } else {
+          await supabase
+            .from("questions")
+            .insert({
+              interview_id: interviewId,
+              question_number: qNum,
+              question_text: q.question || q.question_text || `Question ${qNum}`,
+              category: q.category || "Technical",
+              user_answer: userAns,
+              question_score: finalQScore,
+              ai_feedback: qResult.ai_feedback || defaultFeedback,
+            });
         }
       }
     }
