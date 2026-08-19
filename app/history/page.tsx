@@ -29,34 +29,33 @@ export default function HistoryPage() {
           return;
         }
 
+        let query = supabase.from("interviews").select("*").order("created_at", { ascending: false });
         if (user) {
-          const { data } = await supabase
-            .from("interviews")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
-
-          const formatted = await Promise.all(
-            (data || []).map(async (item: any) => {
-              const itemScore = await repairAndExtractScore(item, supabase);
-
-              return {
-                id: item.id,
-                title: item.title || `${item.role} Practice`,
-                role: item.role,
-                level: item.level || item.difficulty || "Medium",
-                date: item.created_at ? new Date(item.created_at).toLocaleDateString() : "Recent",
-                questionsCount: 5,
-                score: itemScore,
-                feedback: {
-                  score: itemScore,
-                  summary: item.overall_feedback?.summary || "Completed technical interview practice.",
-                },
-              };
-            })
-          );
-          setInterviews(formatted);
+          query = query.eq("user_id", user.id);
         }
+
+        const { data } = await query;
+
+        const formatted = await Promise.all(
+          (data || []).map(async (item: any) => {
+            const itemScore = await repairAndExtractScore(item, supabase);
+
+            return {
+              id: item.id,
+              title: item.title || `${item.role} Practice`,
+              role: item.role,
+              level: item.level || item.difficulty || "Medium",
+              date: item.created_at ? new Date(item.created_at).toLocaleDateString() : "Recent",
+              questionsCount: 5,
+              score: itemScore,
+              feedback: {
+                score: itemScore,
+                summary: item.overall_feedback?.summary || "Completed technical interview practice.",
+              },
+            };
+          })
+        );
+        setInterviews(formatted);
       } catch (error) {
         console.error("Error fetching history", error);
       } finally {

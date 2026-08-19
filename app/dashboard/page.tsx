@@ -35,22 +35,21 @@ export default function DashboardPage() {
         }
 
         // Fetch interviews for authenticated user from Supabase interviews table
+        let query = supabase.from("interviews").select("*").order("created_at", { ascending: false });
         if (user) {
-          const { data: interviewsData } = await supabase
-            .from("interviews")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
+          query = query.eq("user_id", user.id);
+        }
 
-          if (interviewsData) {
-            const repaired = await Promise.all(
-              interviewsData.map(async (item) => {
-                const s = await repairAndExtractScore(item, supabase);
-                return { ...item, score: s };
-              })
-            );
-            setInterviews(repaired);
-          }
+        const { data: interviewsData } = await query;
+
+        if (interviewsData) {
+          const repaired = await Promise.all(
+            interviewsData.map(async (item) => {
+              const s = await repairAndExtractScore(item, supabase);
+              return { ...item, score: s };
+            })
+          );
+          setInterviews(repaired);
         }
       } catch (error) {
         console.error("Failed to load dashboard data", error);

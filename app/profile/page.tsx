@@ -50,21 +50,21 @@ export default function ProfilePage() {
           });
         }
 
+        let query = supabase.from("interviews").select("*");
         if (user) {
-          const { data: interviewsData } = await supabase
-            .from("interviews")
-            .select("*")
-            .eq("user_id", user.id);
+          query = query.eq("user_id", user.id);
+        }
 
-          if (interviewsData) {
-            setTotalInterviews(interviewsData.length);
-            if (interviewsData.length > 0) {
-              const scores = await Promise.all(
-                interviewsData.map((curr) => repairAndExtractScore(curr, supabase))
-              );
-              const total = scores.reduce((acc, s) => acc + s, 0);
-              setAvgScore(Math.round(total / interviewsData.length));
-            }
+        const { data: interviewsData } = await query;
+
+        if (interviewsData) {
+          setTotalInterviews(interviewsData.length);
+          if (interviewsData.length > 0) {
+            const scores = await Promise.all(
+              interviewsData.map((curr) => repairAndExtractScore(curr, supabase))
+            );
+            const total = scores.reduce((acc, s) => acc + s, 0);
+            setAvgScore(Math.round(total / interviewsData.length));
           }
         }
       } catch (error) {
