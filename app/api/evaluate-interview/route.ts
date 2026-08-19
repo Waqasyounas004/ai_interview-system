@@ -55,16 +55,14 @@ ${evalQuestions
   })
   .join("\n\n")}
 
-CRITICAL HONEST SCORING RULES:
-1. ACCURATE / RELEVANT ANSWERS (80 - 100 Marks):
-   - Award high scores for correct, technically accurate, and thorough answers.
-2. PARTIALLY RELEVANT / INCOMPLETE ANSWERS (30 - 79 Marks):
-   - Award partial marks according to technical relevance. Deduct marks for missing key concepts, brevity, or inaccuracies.
-3. SKIPPED / NON-ANSWERS (0 Marks):
-   - If candidate states "I don't know", "idk", "no idea", "pass", "skip", "n/a", or leaves the answer blank/empty, assign EXACTLY question_score = 0.
-4. IRRELEVANT / OFF-TOPIC ANSWERS (0 Marks):
-   - If candidate provides content completely unrelated to the question asked, assign EXACTLY question_score = 0.
-5. MATHEMATICAL OVERALL SCORE:
+CRITICAL EVALUATION & SCORING RULES:
+1. COMPLETE & RELEVANT ANSWERS (80 - 100 Marks):
+   - When candidate provides relevant technical answers, BE GENEROUS and award 85-100 marks.
+2. BRIEF / PARTIAL ANSWERS (60 - 84 Marks):
+   - If candidate attempts the question with partial technical relevance, award 60-84 marks.
+3. SKIPPED / NON-ANSWERS / OFF-TOPIC (0 Marks):
+   - ONLY assign 0 marks if candidate explicitly skips ("idk", "pass", blank) or writes completely off-topic content.
+4. MATHEMATICAL OVERALL SCORE:
    - "overall_score" MUST be the exact mathematical average of all question_score items: Math.round(Sum of question_scores / total_questions).
 
 Provide an evaluation as a JSON object matching this schema:

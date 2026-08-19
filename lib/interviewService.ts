@@ -185,22 +185,22 @@ export function evaluateFallbackAnswers(
         qScore = 0;
         qFeedback = "Response is irrelevant to the question asked.";
       } else {
-        // Answer has some technical or topic relevance - calculate score with deductions for brevity/missing terms
-        let baseScore = 50;
-        if (wordCount >= 10) baseScore += 15;
-        if (wordCount >= 25) baseScore += 15;
+        // Answer has technical/topic relevance - calculate generous score
+        let baseScore = 75;
+        if (wordCount >= 8) baseScore += 10;
+        if (wordCount >= 20) baseScore += 10;
 
         // Reward topic and technical relevance
-        baseScore += Math.min(20, topicOverlap.length * 5 + techOverlap.length * 3);
+        baseScore += Math.min(10, topicOverlap.length * 3 + techOverlap.length * 2);
 
-        qScore = Math.min(100, Math.max(20, baseScore));
+        qScore = Math.min(100, Math.max(60, baseScore));
 
         if (qScore >= 85) {
           qFeedback = "Excellent answer! Demonstrates clear technical understanding and practical experience.";
-        } else if (qScore >= 65) {
-          qFeedback = "Solid attempt, but missing some key technical details or architectural examples.";
+        } else if (qScore >= 70) {
+          qFeedback = "Good attempt! Touches on core technical concepts and principles.";
         } else {
-          qFeedback = "Partially relevant answer. Significant points deducted for lack of technical depth and missing core concepts.";
+          qFeedback = "Answer provided with partial technical relevance.";
         }
       }
     }
