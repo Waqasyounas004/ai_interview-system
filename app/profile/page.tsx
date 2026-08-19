@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { supabase } from "@/lib/supabase";
 import { getUserProfile, updateUserProfile } from "@/lib/profileService";
+import { extractInterviewScore } from "@/lib/utils";
 
 
 
@@ -52,13 +53,13 @@ export default function ProfilePage() {
         if (user) {
           const { data: interviewsData } = await supabase
             .from("interviews")
-            .select("score")
+            .select("*")
             .eq("user_id", user.id);
 
           if (interviewsData) {
             setTotalInterviews(interviewsData.length);
             if (interviewsData.length > 0) {
-              const total = interviewsData.reduce((acc, curr) => acc + (curr.score || 0), 0);
+              const total = interviewsData.reduce((acc, curr) => acc + extractInterviewScore(curr), 0);
               setAvgScore(Math.round(total / interviewsData.length));
             }
           }
