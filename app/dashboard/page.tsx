@@ -7,7 +7,7 @@ import StatsCard from "@/components/dashboard/StatsCard";
 import RecentInterviews from "@/components/dashboard/RecentInterviews";
 import Button from "@/components/ui/Button";
 import { supabase } from "@/lib/supabase";
-
+import { extractInterviewScore } from "@/lib/utils";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -55,10 +55,9 @@ export default function DashboardPage() {
   }, [router]);
 
   const totalInterviews = interviews.length;
+  const scoresList = interviews.map((item) => extractInterviewScore(item));
   const averageScore = totalInterviews > 0
-    ? Math.round(
-        interviews.reduce((acc, curr) => acc + (curr.score || 0), 0) / totalInterviews
-      )
+    ? Math.round(scoresList.reduce((acc, curr) => acc + curr, 0) / totalInterviews)
     : 0;
 
   return (

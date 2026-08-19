@@ -8,7 +8,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Card from "@/components/ui/Card";
 import { supabase } from "@/lib/supabase";
-
+import { extractInterviewScore } from "@/lib/utils";
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -37,9 +37,7 @@ export default function HistoryPage() {
             .order("created_at", { ascending: false });
 
           const formatted = (data || []).map((item: any) => {
-            const itemScore = typeof item.score === "number"
-              ? item.score
-              : (item.overall_feedback?.score || item.feedback?.score || 0);
+            const itemScore = extractInterviewScore(item);
 
             return {
               id: item.id,

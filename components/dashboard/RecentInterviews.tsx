@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Interview } from "@/types/interview";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { formatDate, getScoreBadgeColor } from "@/lib/utils";
+import { formatDate, getScoreBadgeColor, extractInterviewScore } from "@/lib/utils";
 
 interface RecentInterviewsProps {
   interviews: Interview[];
@@ -48,9 +48,7 @@ export default function RecentInterviews({
 
       <div className="space-y-3">
         {interviews.map((interview) => {
-          const score = typeof interview.score === "number"
-            ? interview.score
-            : (interview.feedback?.score ?? interview.overall_feedback?.score ?? 0);
+          const score = extractInterviewScore(interview);
           const colors = getScoreBadgeColor(score);
 
           return (

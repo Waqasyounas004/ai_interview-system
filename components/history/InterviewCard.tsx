@@ -2,16 +2,14 @@ import Link from "next/link";
 import { Interview } from "@/types/interview";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { formatDate, getScoreBadgeColor } from "@/lib/utils";
+import { formatDate, getScoreBadgeColor, extractInterviewScore } from "@/lib/utils";
 
 interface InterviewCardProps {
   interview: Interview;
 }
 
 export default function InterviewCard({ interview }: InterviewCardProps) {
-  const score = typeof interview.score === "number"
-    ? interview.score
-    : (interview.feedback?.score ?? interview.overall_feedback?.score ?? 0);
+  const score = extractInterviewScore(interview);
   const badge = getScoreBadgeColor(score);
   const questionCount = interview.questions?.length ?? 5;
 

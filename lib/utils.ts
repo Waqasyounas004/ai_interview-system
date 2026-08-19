@@ -51,3 +51,20 @@ export function truncateText(text: string, maxLength: number = 60): string {
   if (!text || text.length <= maxLength) return text;
   return text.slice(0, maxLength) + "...";
 }
+
+export function extractInterviewScore(interview: any): number {
+  if (!interview) return 0;
+  if (typeof interview.score === "number" && interview.score > 0) {
+    return interview.score;
+  }
+  if (typeof interview.overall_feedback?.score === "number") {
+    return interview.overall_feedback.score;
+  }
+  if (typeof interview.feedback?.score === "number") {
+    return interview.feedback.score;
+  }
+  if (typeof interview.score === "number") {
+    return interview.score;
+  }
+  return 0;
+}
