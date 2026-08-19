@@ -107,7 +107,7 @@ const NON_ANSWER_PATTERNS = [
   "none",
 ];
 
-function isNonAnswer(text: string): boolean {
+export function isNonAnswer(text: string): boolean {
   if (!text) return true;
   const cleaned = text.trim().toLowerCase().replace(/[^a-z0-9\s]/g, "");
   if (cleaned.length === 0) return true;
@@ -133,7 +133,7 @@ export function getAnswerForQuestion(
   return "";
 }
 
-function evaluateFallbackAnswers(
+export function evaluateFallbackAnswers(
   questions: Array<{ id?: string; question_text?: string; question?: string; question_number: number }>,
   answers: Record<string, string>
 ) {
@@ -402,6 +402,23 @@ export async function evaluateInterviewSession({
   questions: any[];
   answers: Record<string, string>;
 }) {
+  try {
+    const res = await fetch("/api/evaluate-interview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ interviewId, questions, answers }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        return data;
+      }
+    }
+  } catch (err) {
+    console.warn("Client fetch to /api/evaluate-interview failed, attempting fallback:", err);
+  }
+
   let evaluationResult = null;
   const groqKey = process.env.NEXT_PUBLIC_GROQ_API_KEY || process.env.GROQ_API_KEY || "";
 
