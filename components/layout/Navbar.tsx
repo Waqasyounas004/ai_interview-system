@@ -117,7 +117,7 @@ export default function Navbar() {
           )}
 
           <Link
-            href="/interview/new"
+            href={isLoggedIn ? "/interview/new" : "/login"}
             className="hidden rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition-all hover:bg-indigo-700 sm:inline-block"
           >
             Start Practice

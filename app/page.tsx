@@ -1,8 +1,43 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import { supabase } from "@/lib/supabase";
 
 export default function Home() {
+  // Mirrors the auth check in components/layout/Navbar.tsx so the "Start
+  // Interview" CTAs below go straight into the interview flow for a logged-in
+  // user instead of always sending them back through signup/login.
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      const { data } = await supabase.auth.getSession();
+      const localToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      setIsLoggedIn(!!data?.session || !!localToken);
+    };
+
+    checkAuthStatus();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    window.addEventListener("auth-change", checkAuthStatus);
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+      window.removeEventListener("auth-change", checkAuthStatus);
+    };
+  }, []);
+
+  const primaryCtaHref = isLoggedIn ? "/interview/new" : "/signup";
+  const primaryCtaLabel = isLoggedIn ? "Start Interview" : "Start Practice Free";
+  const secondaryCtaHref = isLoggedIn ? "/interview/new" : "/login";
+  const secondaryCtaLabel = isLoggedIn ? "Start New Interview" : "Get Started Now";
+
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       {/* Hero Section */}
@@ -31,9 +66,9 @@ export default function Home() {
 
         {/* Action Buttons */}
         <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-          <Link href="/signup">
+          <Link href={primaryCtaHref}>
             <Button size="lg" className="px-8 py-3.5 shadow-lg shadow-indigo-500/25">
-              Start Practice Free
+              {primaryCtaLabel}
             </Button>
           </Link>
           <Link href="/dashboard">
@@ -110,9 +145,9 @@ export default function Home() {
             Join thousands of developers leveling up their interview readiness.
           </p>
 
-          <Link href="/login" className="mt-6 inline-block">
+          <Link href={secondaryCtaHref} className="mt-6 inline-block">
             <Button size="lg" className="px-8 py-3.5 shadow-lg shadow-indigo-500/25">
-              Get Started Now
+              {secondaryCtaLabel}
             </Button>
           </Link>
         </div>
