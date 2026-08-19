@@ -12,13 +12,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Missing interviewId" }, { status: 400 });
     }
 
+    const authHeader = request.headers.get("authorization");
+    const authToken = authHeader ? authHeader.replace("Bearer ", "").trim() : "";
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
     const supabaseKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
       "";
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(
+      supabaseUrl,
+      supabaseKey,
+      authToken
+        ? {
+            global: {
+              headers: { Authorization: `Bearer ${authToken}` },
+            },
+          }
+        : undefined
+    );
 
     const groqKey =
       process.env.GROQ_API_KEY ||

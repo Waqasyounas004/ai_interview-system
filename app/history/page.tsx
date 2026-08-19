@@ -67,16 +67,12 @@ export default function HistoryPage() {
 
   // Calculate high-level stats
   const totalInterviews = interviews.length;
+  const validScores = interviews.map((item) => extractInterviewScore(item));
   const avgScore = totalInterviews
-    ? Math.round(
-        interviews.reduce(
-          (acc, item) => acc + (item.feedback?.score ?? 0),
-          0
-        ) / totalInterviews
-      )
+    ? Math.round(validScores.reduce((acc, s) => acc + s, 0) / totalInterviews)
     : 0;
   const maxScore = totalInterviews
-    ? Math.max(...interviews.map((item) => item.feedback?.score ?? 0))
+    ? Math.max(...validScores)
     : 0;
 
   // Filter & sort logic

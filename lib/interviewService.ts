@@ -403,27 +403,34 @@ export async function evaluateInterviewSession({
   answers: Record<string, string>;
 }) {
   try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
     const res = await fetch("/api/evaluate-interview", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ interviewId, questions, answers }),
     });
 
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
+        const evaluatedScore = typeof data.score === "number" ? data.score : 0;
         // Dual-sync score to Supabase via authenticated client session
         await supabase
           .from("interviews")
           .update({
             status: "completed",
-            score: typeof data.score === "number" ? data.score : 0,
+            score: evaluatedScore,
             overall_feedback: data.feedback,
             updated_at: new Date().toISOString(),
           })
           .eq("id", interviewId);
 
-        return data;
+        return { ...data, score: evaluatedScore };
       }
     }
   } catch (err) {
