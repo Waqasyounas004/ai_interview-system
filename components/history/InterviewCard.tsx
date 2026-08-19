@@ -9,9 +9,11 @@ interface InterviewCardProps {
 }
 
 export default function InterviewCard({ interview }: InterviewCardProps) {
-  const score = interview.feedback?.score ?? 0;
+  const score = typeof interview.score === "number"
+    ? interview.score
+    : (interview.feedback?.score ?? interview.overall_feedback?.score ?? 0);
   const badge = getScoreBadgeColor(score);
-  const questionCount = interview.questions?.length ?? 0;
+  const questionCount = interview.questions?.length ?? 5;
 
   return (
     <Card className="group relative flex flex-col justify-between overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:hover:border-zinc-700">
@@ -73,7 +75,7 @@ export default function InterviewCard({ interview }: InterviewCardProps) {
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            <span>{formatDate(interview.date)}</span>
+            <span>{formatDate(interview.date || (interview as any).created_at || "")}</span>
           </div>
 
           <div className="flex items-center gap-1.5">

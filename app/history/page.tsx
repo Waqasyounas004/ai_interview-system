@@ -36,18 +36,25 @@ export default function HistoryPage() {
             .eq("user_id", user.id)
             .order("created_at", { ascending: false });
 
-          const formatted = (data || []).map((item: any) => ({
-            id: item.id,
-            title: `${item.role} Practice`,
-            role: item.role,
-            level: item.difficulty || "Medium",
-            date: item.created_at ? new Date(item.created_at).toLocaleDateString() : "Recent",
-            questionsCount: 5,
-            feedback: {
-              score: item.score || 85,
-              summary: "Good technical explanation with solid structure.",
-            },
-          }));
+          const formatted = (data || []).map((item: any) => {
+            const itemScore = typeof item.score === "number"
+              ? item.score
+              : (item.overall_feedback?.score || item.feedback?.score || 0);
+
+            return {
+              id: item.id,
+              title: item.title || `${item.role} Practice`,
+              role: item.role,
+              level: item.level || item.difficulty || "Medium",
+              date: item.created_at ? new Date(item.created_at).toLocaleDateString() : "Recent",
+              questionsCount: 5,
+              score: itemScore,
+              feedback: {
+                score: itemScore,
+                summary: item.overall_feedback?.summary || "Completed technical interview practice.",
+              },
+            };
+          });
           setInterviews(formatted);
         }
       } catch (error) {
@@ -131,7 +138,7 @@ export default function HistoryPage() {
               Average Score
             </p>
             <p className="mt-1 text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {avgScore}%
+              {totalInterviews > 0 ? `${avgScore}%` : "N/A"}
             </p>
           </div>
           <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
@@ -139,7 +146,7 @@ export default function HistoryPage() {
               Highest Score
             </p>
             <p className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-              {maxScore}%
+              {totalInterviews > 0 ? `${maxScore}%` : "N/A"}
             </p>
           </div>
         </div>

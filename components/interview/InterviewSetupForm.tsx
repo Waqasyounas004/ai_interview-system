@@ -5,22 +5,40 @@ import { useRouter } from "next/navigation";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import { createInterviewSession } from "@/lib/interviewService";
 
 export default function InterviewSetupForm() {
   const router = useRouter();
-  const [role, setRole] = useState("Frontend Developer");
+  const [role, setRole] = useState("");
   const [level, setLevel] = useState("Junior");
+  const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setIsLoading(true);
-    console.log("Starting interview setup:", { role, level });
+    setErrorMsg("");
 
-    setTimeout(() => {
+    try {
+      const selectedRole = role.trim() || "Frontend Developer";
+
+      const res = await createInterviewSession({
+        role: selectedRole,
+        level,
+        questionCount: 5,
+      });
+
+      if (!res.success || !res.interview_id) {
+        throw new Error("Failed to create interview session");
+      }
+
+      router.push(`/interview/${res.interview_id}`);
+    } catch (err: any) {
+      console.error("Interview creation error:", err);
+      setErrorMsg(err.message || "An error occurred while creating your interview.");
+    } finally {
       setIsLoading(false);
-      router.push("/interview/1");
-    }, 600);
+    }
   }
 
   return (
@@ -30,9 +48,15 @@ export default function InterviewSetupForm() {
           Setup Your Interview
         </h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Configure your target role and experience level
+          Configure your target role and experience level for a 5-question session
         </p>
       </div>
+
+      {errorMsg && (
+        <div className="mb-4 rounded-lg bg-red-50 p-3 text-xs font-medium text-red-700 dark:bg-red-950/50 dark:text-red-300 border border-red-200 dark:border-red-800">
+          {errorMsg}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <Input
@@ -41,7 +65,6 @@ export default function InterviewSetupForm() {
           placeholder="e.g. Frontend Developer"
           value={role}
           onChange={(e) => setRole(e.target.value)}
-          required
         />
 
         <div className="space-y-1.5">

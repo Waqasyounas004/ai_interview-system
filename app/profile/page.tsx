@@ -7,6 +7,8 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { supabase } from "@/lib/supabase";
+import { getUserProfile, updateUserProfile } from "@/lib/profileService";
+
 
 
 export default function ProfilePage() {
@@ -19,46 +21,56 @@ export default function ProfilePage() {
   });
 
   const [totalInterviews, setTotalInterviews] = useState(0);
+  const [avgScore, setAvgScore] = useState<number | null>(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchProfile() {
+    async function fetchProfileData() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        const storedName = localStorage.getItem("name");
-        const storedEmail = localStorage.getItem("email");
 
-        if (!user && !storedName) {
-          router.push("/login");
-          return;
+        if (!user) {
+          const storedToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+          if (!storedToken) {
+            router.push("/login");
+            return;
+          }
         }
 
-        const currentName = user?.user_metadata?.name || storedName || "User";
-        const currentEmail = user?.email || storedEmail || "user@example.com";
-
-        setFormData((prev) => ({
-          ...prev,
-          name: currentName,
-          email: currentEmail,
-        }));
+        const profile = await getUserProfile();
+        if (profile) {
+          setFormData({
+            name: profile.name || "User",
+            email: profile.email || "user@example.com",
+            role: profile.role || "Fullstack Developer",
+            experienceLevel: profile.experience_level || "Mid-Level",
+          });
+        }
 
         if (user) {
-          const { count } = await supabase
+          const { data: interviewsData } = await supabase
             .from("interviews")
-            .select("id", { count: "exact", head: true })
+            .select("score")
             .eq("user_id", user.id);
 
-          setTotalInterviews(count || 0);
+          if (interviewsData) {
+            setTotalInterviews(interviewsData.length);
+            if (interviewsData.length > 0) {
+              const total = interviewsData.reduce((acc, curr) => acc + (curr.score || 0), 0);
+              setAvgScore(Math.round(total / interviewsData.length));
+            }
+          }
         }
       } catch (error) {
-        console.error("Error fetching profile", error);
+        console.error("Error fetching profile data", error);
       } finally {
         setIsLoading(false);
       }
     }
 
-    fetchProfile();
+    fetchProfileData();
   }, [router]);
 
   const handleChange = (
@@ -69,14 +81,31 @@ export default function ProfilePage() {
     setSavedSuccess(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (typeof window !== "undefined") {
-      localStorage.setItem("name", formData.name);
-      window.dispatchEvent(new Event("auth-change"));
+    setIsSaving(true);
+    try {
+      const res = await updateUserProfile({
+        name: formData.name,
+        role: formData.role,
+        experience_level: formData.experienceLevel,
+      });
+
+      if (res.success) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("name", formData.name);
+          window.dispatchEvent(new Event("auth-change"));
+        }
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 3000);
+      } else {
+        alert(`Failed to save profile: ${res.error}`);
+      }
+    } catch (err) {
+      console.error("Failed to update profile", err);
+    } finally {
+      setIsSaving(false);
     }
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
   };
 
   return (
@@ -153,7 +182,7 @@ export default function ProfilePage() {
                 Average Overall Score
               </p>
               <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                88%
+                {avgScore !== null ? `${avgScore}%` : totalInterviews > 0 ? "0%" : "N/A"}
               </p>
             </div>
           </Card>

@@ -48,7 +48,10 @@ export default function RecentInterviews({
 
       <div className="space-y-3">
         {interviews.map((interview) => {
-          const colors = getScoreBadgeColor(interview.feedback?.score ?? 0);
+          const score = typeof interview.score === "number"
+            ? interview.score
+            : (interview.feedback?.score ?? interview.overall_feedback?.score ?? 0);
+          const colors = getScoreBadgeColor(score);
 
           return (
             <Link
@@ -66,7 +69,7 @@ export default function RecentInterviews({
                   </span>
                 </div>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {interview.role} • {formatDate(interview.date)}
+                  {interview.role} • {formatDate(interview.date || (interview as any).created_at || "")}
                 </p>
               </div>
 
@@ -74,7 +77,7 @@ export default function RecentInterviews({
                 <div
                   className={`rounded-full border ${colors.border} ${colors.bg} px-3 py-1 text-xs font-bold ${colors.text}`}
                 >
-                  Score: {interview.feedback?.score ?? 0}%
+                  Score: {score}%
                 </div>
                 <span className="text-zinc-400 group-hover:translate-x-0.5 transition-transform">
                   →

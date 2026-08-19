@@ -34,8 +34,15 @@ export default function LoginForm() {
         return;
       }
 
-      setSuccessMessage("Login successful!");
+      if (data?.user?.email) {
+        localStorage.setItem("user_email", data.user.email);
+        localStorage.setItem("email", data.user.email);
+      } else if (email) {
+        localStorage.setItem("user_email", email.trim());
+        localStorage.setItem("email", email.trim());
+      }
 
+      setSuccessMessage("Login successful!");
       router.push("/dashboard");
     } catch (error) {
       setErrorMessage("Something went wrong.");

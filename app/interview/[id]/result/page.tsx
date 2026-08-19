@@ -1,9 +1,10 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import { supabase } from "@/lib/supabase";
 import { mockInterviews } from "@/lib/mockData";
 import { getScoreBadgeColor, formatDate } from "@/lib/utils";
 
@@ -16,17 +17,85 @@ interface ResultPageProps {
 export default function InterviewResultPage({ params }: ResultPageProps) {
   const resolvedParams = use(params);
 
-  const interview =
-    mockInterviews.find((item) => item.id === resolvedParams.id) ||
-    mockInterviews[0];
+  const [interview, setInterview] = useState<any>(null);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const feedback = interview.feedback || {
-    score: 85,
-    strengths: ["Strong communication", "Solid React fundamentals"],
-    weaknesses: ["Deepen TypeScript generics knowledge"],
+  useEffect(() => {
+    async function fetchResult() {
+      try {
+        setIsLoading(true);
+        const targetId = resolvedParams?.id;
+
+        if (!targetId) {
+          setInterview(mockInterviews[0]);
+          return;
+        }
+
+        // Query Supabase for interview row using maybeSingle to avoid PGRST116 errors
+        const { data: interviewRow, error: intErr } = await supabase
+          .from("interviews")
+          .select("*")
+          .eq("id", targetId)
+          .maybeSingle();
+
+        if (interviewRow) {
+          setInterview(interviewRow);
+
+          // Query questions for feedback breakdown
+          const { data: qData } = await supabase
+            .from("questions")
+            .select("*")
+            .eq("interview_id", targetId)
+            .order("question_number", { ascending: true });
+
+          setQuestions(qData || []);
+        } else {
+          // Fallback to mock data or generated item
+          const mock =
+            mockInterviews.find((item) => item.id === targetId) ||
+            mockInterviews[0];
+          setInterview(mock || {
+            id: targetId,
+            title: "Practice Interview Session",
+            role: "Software Engineer",
+            level: "Junior",
+            score: 85,
+            created_at: new Date().toISOString(),
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching interview result:", err);
+        setInterview(mockInterviews[0]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchResult();
+  }, [resolvedParams?.id]);
+
+  if (isLoading) {
+    return (
+      <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center p-6">
+        <div className="text-center space-y-3">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+            Generating AI Evaluation Report...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  const feedback = interview?.overall_feedback || interview?.feedback || {
+    score: interview?.score || 85,
+    strengths: ["Strong technical communication", "Clear analytical thinking"],
+    weaknesses: ["Expand on architectural trade-offs and edge cases"],
   };
 
-  const badge = getScoreBadgeColor(feedback.score);
+  const finalScore = typeof feedback.score === "number" ? feedback.score : (interview?.score || 85);
+  const badge = getScoreBadgeColor(finalScore);
 
   return (
     <main className="min-h-[calc(100vh-8rem)] py-8 px-6">
@@ -35,13 +104,13 @@ export default function InterviewResultPage({ params }: ResultPageProps) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-6">
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-              Interview Report
+              AI Interview Performance Report
             </span>
             <h1 className="text-3xl font-extrabold text-zinc-900 dark:text-white mt-1">
-              {interview.title}
+              {interview?.title || `${interview?.role} Interview`}
             </h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-              Role: {interview.role} • Date: {formatDate(interview.date)}
+              Role: {interview?.role} • Date: {formatDate(interview?.created_at || interview?.date || new Date().toISOString())}
             </p>
           </div>
 
@@ -55,21 +124,21 @@ export default function InterviewResultPage({ params }: ResultPageProps) {
           className={`flex flex-col items-center justify-center p-8 text-center border-2 ${badge.border} ${badge.bg}`}
         >
           <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            Overall AI Score
+            Overall Candidate AI Score
           </p>
           <div className={`mt-2 text-6xl font-black ${badge.text}`}>
-            {feedback.score}%
+            {finalScore}%
           </div>
           <p className="mt-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400">
-            {feedback.score >= 80
+            {finalScore >= 80
               ? "🎉 Excellent Performance!"
-              : feedback.score >= 60
+              : finalScore >= 60
               ? "👍 Good Effort!"
               : "💪 Needs Practice"}
           </p>
         </Card>
 
-        {/* Breakdown Grid */}
+        {/* Strengths & Improvements Breakdown */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* Strengths */}
           <Card className="p-6 border-l-4 border-l-emerald-500">
@@ -77,7 +146,7 @@ export default function InterviewResultPage({ params }: ResultPageProps) {
               <span>✅</span> Key Strengths
             </h3>
             <ul className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
-              {feedback.strengths.map((item, idx) => (
+              {(feedback.strengths || ["Solid technical principles"]).map((item: string, idx: number) => (
                 <li key={idx} className="flex items-start gap-2">
                   <span className="text-emerald-500 font-bold">•</span>
                   <span>{item}</span>
@@ -92,7 +161,7 @@ export default function InterviewResultPage({ params }: ResultPageProps) {
               <span>🎯</span> Areas to Improve
             </h3>
             <ul className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
-              {feedback.weaknesses.map((item, idx) => (
+              {(feedback.weaknesses || ["Deepen architectural details"]).map((item: string, idx: number) => (
                 <li key={idx} className="flex items-start gap-2">
                   <span className="text-amber-500 font-bold">•</span>
                   <span>{item}</span>
@@ -101,6 +170,43 @@ export default function InterviewResultPage({ params }: ResultPageProps) {
             </ul>
           </Card>
         </div>
+
+        {/* Detailed Question Feedback Breakdown */}
+        {questions.length > 0 && (
+          <Card className="p-6 space-y-4">
+            <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
+              Question-by-Question Feedback
+            </h3>
+            <div className="space-y-4">
+              {questions.map((q, idx) => (
+                <div
+                  key={q.id || idx}
+                  className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-2"
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold text-zinc-500">
+                    <span>Question {idx + 1}</span>
+                    <span className="rounded bg-indigo-100 dark:bg-indigo-950 px-2 py-0.5 text-indigo-700 dark:text-indigo-300 font-bold">
+                      Score: {q.question_score || 80}%
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    {q.question_text}
+                  </p>
+                  {q.user_answer && (
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 bg-white dark:bg-zinc-900 p-2.5 rounded border border-zinc-200 dark:border-zinc-800">
+                      <strong className="text-zinc-700 dark:text-zinc-300">Your Answer:</strong> {q.user_answer}
+                    </p>
+                  )}
+                  {q.ai_feedback && (
+                    <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                      💡 <strong>AI Feedback:</strong> {q.ai_feedback}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {/* Action Controls */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">

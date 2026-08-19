@@ -59,7 +59,7 @@ export default function DashboardPage() {
     ? Math.round(
         interviews.reduce((acc, curr) => acc + (curr.score || 0), 0) / totalInterviews
       )
-    : 85;
+    : 0;
 
   return (
     <div className="space-y-8">
@@ -106,7 +106,7 @@ export default function DashboardPage() {
 
         <StatsCard
           title="Average Score"
-          value={`${averageScore}%`}
+          value={totalInterviews > 0 ? `${averageScore}%` : "N/A"}
           trend="Top candidate score"
           icon={
             <svg

@@ -15,7 +15,9 @@ export interface Interview {
   title: string;
   role: string;
   level: string;
-  date: string;
-  questions: Question[];
-  feedback: Feedback;
+  date?: string;
+  score?: number;
+  questions?: Question[];
+  feedback?: Feedback;
+  overall_feedback?: any;
 }
