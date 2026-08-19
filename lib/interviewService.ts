@@ -1,5 +1,90 @@
 import { supabase } from "./supabase";
 
+/**
+ * Schema-drift resilience helpers.
+ *
+ * The Supabase `interviews` / `questions` tables have historically drifted from the
+ * column names this app writes (e.g. no `updated_at` on `interviews`, no
+ * `question_text` / `question_number` / `user_answer` / `question_score` /
+ * `ai_feedback` on `questions`). PostgREST rejects the ENTIRE insert/update when a
+ * payload references an unknown column, so a single bad field silently drops the
+ * whole write (including the score). These helpers detect that specific error and
+ * retry with the offending column stripped, so a schema mismatch degrades gracefully
+ * instead of losing the write outright.
+ */
+function extractMissingColumn(errMessage: string | undefined | null): string | null {
+  if (!errMessage) return null;
+  const m1 = errMessage.match(/Could not find the '([^']+)' column/i);
+  if (m1) return m1[1];
+  const m2 = errMessage.match(/column [\w."]*\.(\w+) does not exist/i);
+  if (m2) return m2[1];
+  return null;
+}
+
+export async function safeUpdate(
+  client: any,
+  table: string,
+  payload: Record<string, any>,
+  matchColumn: string,
+  matchValue: any,
+  maxAttempts = 6
+): Promise<{ error: any }> {
+  let workingPayload: Record<string, any> = { ...payload };
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (Object.keys(workingPayload).length === 0) break;
+
+    const res = await client.from(table).update(workingPayload).eq(matchColumn, matchValue);
+    if (!res.error) return { error: null };
+
+    lastError = res.error;
+    const badCol = extractMissingColumn(res.error.message);
+    if (badCol && workingPayload.hasOwnProperty(badCol)) {
+      delete workingPayload[badCol];
+      continue;
+    }
+    break;
+  }
+
+  if (lastError) {
+    console.warn(`safeUpdate: failed to update "${table}" after column repair attempts:`, lastError.message);
+  }
+  return { error: lastError };
+}
+
+export async function safeInsertRows(
+  client: any,
+  table: string,
+  rows: Record<string, any>[],
+  maxAttempts = 6
+): Promise<{ data: any[] | null; error: any }> {
+  let workingRows = rows.map((r) => ({ ...r }));
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await client.from(table).insert(workingRows).select();
+    if (!res.error) return { data: res.data, error: null };
+
+    lastError = res.error;
+    const badCol = extractMissingColumn(res.error.message);
+    if (badCol) {
+      workingRows = workingRows.map((r) => {
+        const clone = { ...r };
+        delete clone[badCol];
+        return clone;
+      });
+      continue;
+    }
+    break;
+  }
+
+  if (lastError) {
+    console.warn(`safeInsertRows: failed to insert into "${table}" after column repair attempts:`, lastError.message);
+  }
+  return { data: null, error: lastError };
+}
+
 export function getFallbackQuestions(role: string, level: string, count: number): Array<{ question: string; category: string }> {
   const cleanRole = (role || "Software Engineer").trim();
   const isSenior = level.toLowerCase().includes("senior") || level.toLowerCase().includes("lead");
@@ -367,19 +452,14 @@ export async function createInterviewSession({
     category: q.category,
   }));
 
-  let { data: insertedQuestions, error: qErr } = await supabase
-    .from("questions")
-    .insert(questionsPayload)
-    .select();
+  const { data: insertedQuestions, error: qErr } = await safeInsertRows(
+    supabase,
+    "questions",
+    questionsPayload
+  );
 
-  if (qErr && qErr.message?.includes("category")) {
-    const qNoCat = generatedQuestions.map((q, idx) => ({
-      interview_id: interviewRow.id,
-      question_number: idx + 1,
-      question_text: q.question,
-    }));
-    const retryQ = await supabase.from("questions").insert(qNoCat).select();
-    insertedQuestions = retryQ.data;
+  if (qErr) {
+    console.warn("Failed to persist questions to Supabase after column repair attempts:", qErr.message);
   }
 
   return {
@@ -419,16 +499,25 @@ export async function evaluateInterviewSession({
       const data = await res.json();
       if (data.success) {
         const evaluatedScore = typeof data.score === "number" ? data.score : 0;
-        // Dual-sync score to Supabase via authenticated client session
-        await supabase
-          .from("interviews")
-          .update({
+        // Dual-sync score to Supabase via authenticated client session.
+        // Uses safeUpdate so a schema mismatch (e.g. missing `updated_at`) can't
+        // silently drop the whole write and leave the score stuck at 0.
+        const { error: dualSyncErr } = await safeUpdate(
+          supabase,
+          "interviews",
+          {
             status: "completed",
             score: evaluatedScore,
             overall_feedback: data.feedback,
             updated_at: new Date().toISOString(),
-          })
-          .eq("id", interviewId);
+          },
+          "id",
+          interviewId
+        );
+
+        if (dualSyncErr) {
+          console.warn("Dual-sync score update to Supabase failed:", dualSyncErr.message);
+        }
 
         return { ...data, score: evaluatedScore };
       }
@@ -554,14 +643,17 @@ Provide an evaluation as a JSON object matching this schema:
       ) || { question_score: defaultQScore, ai_feedback: defaultFeedback };
 
       if (q.id && !q.id.startsWith("q")) {
-        await supabase
-          .from("questions")
-          .update({
+        await safeUpdate(
+          supabase,
+          "questions",
+          {
             user_answer: userAns,
             question_score: typeof qResult.question_score === "number" ? qResult.question_score : defaultQScore,
             ai_feedback: qResult.ai_feedback || defaultFeedback,
-          })
-          .eq("id", q.id);
+          },
+          "id",
+          q.id
+        );
       }
     }
   }
@@ -573,28 +665,21 @@ Provide an evaluation as a JSON object matching this schema:
     weaknesses: evaluationResult.weaknesses || ["Elaborate with deeper code examples"],
   };
 
-  let updatePayload: any = {
-    status: "completed",
-    score: evaluationResult.overall_score,
-    overall_feedback: overallFeedback,
-    updated_at: new Date().toISOString(),
-  };
+  const { error: finalUpdateErr } = await safeUpdate(
+    supabase,
+    "interviews",
+    {
+      status: "completed",
+      score: evaluationResult.overall_score,
+      overall_feedback: overallFeedback,
+      updated_at: new Date().toISOString(),
+    },
+    "id",
+    interviewId
+  );
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const res = await supabase
-      .from("interviews")
-      .update(updatePayload)
-      .eq("id", interviewId);
-
-    if (!res.error) break;
-
-    const msg = res.error.message || "";
-    const colMatch = msg.match(/Could not find the '([^']+)' column/i);
-    if (colMatch && colMatch[1] && updatePayload.hasOwnProperty(colMatch[1])) {
-      delete updatePayload[colMatch[1]];
-    } else {
-      break;
-    }
+  if (finalUpdateErr) {
+    console.warn("Failed to persist final interview score to Supabase:", finalUpdateErr.message);
   }
 
   // Trigger n8n Webhook if configured

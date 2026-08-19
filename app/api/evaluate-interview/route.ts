@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getAnswerForQuestion, isNonAnswer, evaluateFallbackAnswers } from "@/lib/interviewService";
+import { getAnswerForQuestion, isNonAnswer, evaluateFallbackAnswers, safeUpdate, safeInsertRows } from "@/lib/interviewService";
 
 export const dynamic = "force-dynamic";
 
@@ -150,18 +150,20 @@ Provide an evaluation as a JSON object matching this schema:
         const finalQScore = typeof qResult.question_score === "number" ? qResult.question_score : defaultQScore;
 
         if (q.id && !q.id.startsWith("q")) {
-          await supabase
-            .from("questions")
-            .update({
+          await safeUpdate(
+            supabase,
+            "questions",
+            {
               user_answer: userAns,
               question_score: finalQScore,
               ai_feedback: qResult.ai_feedback || defaultFeedback,
-            })
-            .eq("id", q.id);
+            },
+            "id",
+            q.id
+          );
         } else {
-          await supabase
-            .from("questions")
-            .insert({
+          await safeInsertRows(supabase, "questions", [
+            {
               interview_id: interviewId,
               question_number: qNum,
               question_text: q.question || q.question_text || `Question ${qNum}`,
@@ -169,7 +171,8 @@ Provide an evaluation as a JSON object matching this schema:
               user_answer: userAns,
               question_score: finalQScore,
               ai_feedback: qResult.ai_feedback || defaultFeedback,
-            });
+            },
+          ]);
         }
       }
     }
@@ -215,22 +218,26 @@ Provide an evaluation as a JSON object matching this schema:
       weaknesses: evaluationResult.weaknesses || ["Elaborate with deeper code examples"],
     };
 
-    // Update interview in Supabase
-    const { data: updatedInt, error: updateErr } = await supabase
-      .from("interviews")
-      .update({
+    // Update interview in Supabase. safeUpdate strips any column the live schema
+    // doesn't recognize (e.g. a missing `updated_at`) and retries, instead of
+    // letting PostgREST silently reject the whole write and leave score at 0.
+    const { error: updateErr } = await safeUpdate(
+      supabase,
+      "interviews",
+      {
         status: "completed",
         score: evaluationResult.overall_score,
         overall_feedback: overallFeedback,
         updated_at: new Date().toISOString(),
-      })
-      .eq("id", interviewId)
-      .select();
+      },
+      "id",
+      interviewId
+    );
 
     if (updateErr) {
       console.error("❌ Supabase DB score update error in server route:", updateErr);
     } else {
-      console.log("✅ Supabase DB score updated to:", evaluationResult.overall_score, updatedInt);
+      console.log("✅ Supabase DB score updated to:", evaluationResult.overall_score);
     }
 
     // Trigger n8n Webhook Server-to-Server
