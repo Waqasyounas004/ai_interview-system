@@ -221,6 +221,8 @@ Provide an evaluation as a JSON object matching this schema:
     const feedbackText = `Score: ${evaluationResult.overall_score}%\n\nStrengths:\n${strengthsList}\n\nAreas to Improve:\n${weaknessesList}`;
 
     const n8nPayload = {
+      to: candidateEmail,
+      recipient: candidateEmail,
       name: candidateName,
       email: candidateEmail,
       role: interviewRow?.role || "Software Engineer",
