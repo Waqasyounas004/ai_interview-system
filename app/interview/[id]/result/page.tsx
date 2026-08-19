@@ -8,6 +8,8 @@ import { supabase } from "@/lib/supabase";
 import { mockInterviews } from "@/lib/mockData";
 import { getScoreBadgeColor, formatDate } from "@/lib/utils";
 
+import { useSearchParams } from "next/navigation";
+
 interface ResultPageProps {
   params: Promise<{
     id: string;
@@ -16,6 +18,8 @@ interface ResultPageProps {
 
 export default function InterviewResultPage({ params }: ResultPageProps) {
   const resolvedParams = use(params);
+  const searchParams = useSearchParams();
+  const urlScore = searchParams.get("score");
 
   const [interview, setInterview] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -86,13 +90,19 @@ export default function InterviewResultPage({ params }: ResultPageProps) {
     );
   }
 
+  const parsedUrlScore = urlScore !== null ? Number(urlScore) : null;
+
   const rawScore =
-    typeof interview?.score === "number"
+    parsedUrlScore !== null && !isNaN(parsedUrlScore)
+      ? parsedUrlScore
+      : typeof interview?.score === "number" && interview.score > 0
       ? interview.score
       : typeof interview?.overall_feedback?.score === "number"
       ? interview.overall_feedback.score
       : typeof interview?.feedback?.score === "number"
       ? interview.feedback.score
+      : typeof interview?.score === "number"
+      ? interview.score
       : 0;
 
   const finalScore = Math.min(100, Math.max(0, rawScore));

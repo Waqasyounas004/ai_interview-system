@@ -142,12 +142,14 @@ export default function InterviewPage({ params }: InterviewPageProps) {
     const targetId = resolvedParams?.id || interviewData?.id;
     try {
       if (targetId) {
-        await evaluateInterviewSession({
+        const evalRes = await evaluateInterviewSession({
           interviewId: targetId,
           questions,
           answers,
         });
-        router.push(`/interview/${targetId}/result`);
+
+        const scoreParam = typeof evalRes?.score === "number" ? `?score=${evalRes.score}` : "";
+        router.push(`/interview/${targetId}/result${scoreParam}`);
       } else {
         router.push("/dashboard");
       }
