@@ -199,6 +199,41 @@ export function isNonAnswer(text: string): boolean {
   return NON_ANSWER_PATTERNS.some((pattern) => cleaned === pattern || cleaned.includes(pattern));
 }
 
+/**
+ * Detects an answer that is just the question copy-pasted / lightly reworded back,
+ * with no genuine explanation added. The keyword-overlap scoring below would
+ * otherwise reward this with a near-perfect score, since copying the question
+ * guarantees 100% topic-word overlap with itself.
+ */
+export function isEchoOfQuestion(question: string, answer: string): boolean {
+  const normalize = (s: string) =>
+    (s || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .split(/\s+/)
+      .filter((w) => w.length > 2);
+
+  const qWords = normalize(question);
+  const aWords = normalize(answer);
+  if (aWords.length === 0) return false;
+
+  const qWordSet = new Set(qWords);
+  const qNormStr = qWords.join(" ");
+  const aNormStr = aWords.join(" ");
+
+  // Direct case: the answer (or the bulk of it) is literally a substring of the question.
+  if (aNormStr.length > 10 && qNormStr.includes(aNormStr)) return true;
+
+  // Otherwise: how much of the answer is genuinely NEW content not present in the question?
+  const novelWords = aWords.filter((w) => !qWordSet.has(w));
+  const novelRatio = novelWords.length / aWords.length;
+
+  // A real answer should introduce a meaningful amount of its own vocabulary
+  // (explanations, examples, reasoning). Anything under this threshold is
+  // overwhelmingly just the question's own wording restated.
+  return novelRatio < 0.35;
+}
+
 export function getAnswerForQuestion(
   q: any,
   idx: number,
@@ -236,12 +271,18 @@ export function evaluateFallbackAnswers(
     let qScore = 0;
     let qFeedback = "";
 
+    const qTextRaw = q.question_text || q.question || "";
+
     // 1. Check for non-answers or empty responses
     if (isNonAnswer(trimmed)) {
       qScore = 0;
       qFeedback = "No answer provided or candidate indicated lack of knowledge on this question.";
+    } else if (isEchoOfQuestion(qTextRaw, trimmed)) {
+      // 2. Reject answers that just copy/restate the question with no real content added
+      qScore = 0;
+      qFeedback = "Answer just repeats the question text without providing an actual explanation.";
     } else {
-      const qText = (q.question_text || q.question || "").toLowerCase();
+      const qText = qTextRaw.toLowerCase();
       const answerLower = trimmed.toLowerCase();
       const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
 
@@ -261,7 +302,7 @@ export function evaluateFallbackAnswers(
       const topicOverlap = questionTopicWords.filter((tw) => answerLower.includes(tw));
       const techOverlap = techKeywords.filter((kw) => answerLower.includes(kw));
 
-      // 2. Check for irrelevance
+      // 3. Check for irrelevance
       if (wordCount < 4 && topicOverlap.length === 0 && techOverlap.length === 0) {
         qScore = 0;
         qFeedback = "Response appears off-topic or lacks relevant technical content.";
@@ -560,7 +601,9 @@ CRITICAL HONEST SCORING RULES:
    - If candidate states "I don't know", "idk", "no idea", "pass", "skip", "n/a", or leaves the answer blank/empty, assign EXACTLY question_score = 0.
 4. IRRELEVANT / OFF-TOPIC ANSWERS (0 Marks):
    - If candidate provides content completely unrelated to the question asked, assign EXACTLY question_score = 0.
-5. MATHEMATICAL OVERALL SCORE:
+5. QUESTION-ECHO / COPIED ANSWERS (0 Marks):
+   - If the candidate's "Answer" is the question text itself copied, pasted, or reworded back — with no actual explanation, reasoning, example, or technical detail added beyond what the question already states — assign EXACTLY question_score = 0. Simply reusing the question's own wording or keywords is NOT evidence of a correct answer; do not reward it as relevant.
+6. MATHEMATICAL OVERALL SCORE:
    - "overall_score" MUST be the exact mathematical average of all question_score items: Math.round(Sum of question_scores / total_questions).
 
 Provide an evaluation as a JSON object matching this schema:
@@ -588,7 +631,7 @@ Provide an evaluation as a JSON object matching this schema:
           body: JSON.stringify({
             model: modelName,
             messages: [
-              { role: "system", content: "You are a strictly honest technical evaluator. Assign 0 marks for skipped/non-answers/irrelevant answers. Award partial marks for incomplete answers. Output valid JSON." },
+              { role: "system", content: "You are a strictly honest technical evaluator. Assign 0 marks for skipped/non-answers/irrelevant answers, and 0 marks for any answer that just copies or rewords the question itself without adding real explanation. Award partial marks for incomplete answers. Output valid JSON." },
               { role: "user", content: evaluationPrompt }
             ],
             response_format: { type: "json_object" },
@@ -615,6 +658,24 @@ Provide an evaluation as a JSON object matching this schema:
 
   if (!evaluationResult || typeof evaluationResult.overall_score !== "number") {
     evaluationResult = evaluateFallbackAnswers(evalQuestions, answers);
+  }
+
+  // Anti-gaming safety net: force any answer that just echoes the question back to
+  // 0, regardless of what the LLM scored it. This catches cases where the model
+  // didn't follow the anti-echo instruction in the prompt.
+  if (Array.isArray(evaluationResult.questionResults)) {
+    for (const qr of evaluationResult.questionResults) {
+      const qIdx = evalQuestions.findIndex(
+        (q: any, idx: number) => (q.question_number || idx + 1) === qr.question_number
+      );
+      const matchingQ = qIdx >= 0 ? evalQuestions[qIdx] : null;
+      const userAns = matchingQ ? getAnswerForQuestion(matchingQ, qIdx, answers) : "";
+      const qText = matchingQ?.question_text || matchingQ?.question || "";
+      if (userAns && isEchoOfQuestion(qText, userAns)) {
+        qr.question_score = 0;
+        qr.ai_feedback = "Answer just repeats the question text without providing an actual explanation.";
+      }
+    }
   }
 
   // Guarantee mathematical accuracy: calculate overall_score as the exact average of individual question scores

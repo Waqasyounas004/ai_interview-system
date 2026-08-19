@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getAnswerForQuestion, isNonAnswer, evaluateFallbackAnswers, safeUpdate, safeInsertRows } from "@/lib/interviewService";
+import { getAnswerForQuestion, isNonAnswer, isEchoOfQuestion, evaluateFallbackAnswers, safeUpdate, safeInsertRows } from "@/lib/interviewService";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +62,9 @@ CRITICAL EVALUATION & SCORING RULES:
    - If candidate attempts the question with partial technical relevance, award 60-84 marks.
 3. SKIPPED / NON-ANSWERS / OFF-TOPIC (0 Marks):
    - ONLY assign 0 marks if candidate explicitly skips ("idk", "pass", blank) or writes completely off-topic content.
-4. MATHEMATICAL OVERALL SCORE:
+4. QUESTION-ECHO / COPIED ANSWERS (0 Marks):
+   - If the candidate's "Answer" is the question text itself copied, pasted, or reworded back — with no actual explanation, reasoning, example, or technical detail added beyond what the question already states — assign EXACTLY question_score = 0. Simply reusing the question's own wording or keywords is NOT evidence of a correct answer; do not reward it as relevant.
+5. MATHEMATICAL OVERALL SCORE:
    - "overall_score" MUST be the exact mathematical average of all question_score items: Math.round(Sum of question_scores / total_questions).
 
 Provide an evaluation as a JSON object matching this schema:
@@ -93,7 +95,7 @@ Provide an evaluation as a JSON object matching this schema:
                 {
                   role: "system",
                   content:
-                    "You are a strictly honest technical evaluator. Assign 0 marks for skipped/non-answers/irrelevant answers. Award partial marks for incomplete answers. Output valid JSON.",
+                    "You are a strictly honest technical evaluator. Assign 0 marks for skipped/non-answers/irrelevant answers, and 0 marks for any answer that just copies or rewords the question itself without adding real explanation. Award partial marks for incomplete answers. Output valid JSON.",
                 },
                 { role: "user", content: evaluationPrompt },
               ],
@@ -121,6 +123,24 @@ Provide an evaluation as a JSON object matching this schema:
 
     if (!evaluationResult || typeof evaluationResult.overall_score !== "number") {
       evaluationResult = evaluateFallbackAnswers(evalQuestions, answers);
+    }
+
+    // Anti-gaming safety net: force any answer that just echoes the question back to
+    // 0, regardless of what the LLM scored it. This catches cases where the model
+    // didn't follow the anti-echo instruction in the prompt.
+    if (Array.isArray(evaluationResult.questionResults)) {
+      for (const qr of evaluationResult.questionResults) {
+        const matchingQ = evalQuestions.find(
+          (q: any, idx: number) => (q.question_number || idx + 1) === qr.question_number
+        );
+        const qIdx = evalQuestions.indexOf(matchingQ);
+        const userAns = matchingQ ? getAnswerForQuestion(matchingQ, qIdx, answers) : "";
+        const qText = matchingQ?.question_text || matchingQ?.question || "";
+        if (userAns && isEchoOfQuestion(qText, userAns)) {
+          qr.question_score = 0;
+          qr.ai_feedback = "Answer just repeats the question text without providing an actual explanation.";
+        }
+      }
     }
 
     // Mathematical accuracy guarantee
