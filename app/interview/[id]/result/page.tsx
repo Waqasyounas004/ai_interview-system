@@ -52,15 +52,13 @@ export default function InterviewResultPage({ params }: ResultPageProps) {
           setQuestions(qData || []);
         } else {
           // Fallback to mock data or generated item
-          const mock =
-            mockInterviews.find((item) => item.id === targetId) ||
-            mockInterviews[0];
+          const mock = mockInterviews.find((item) => item.id === targetId);
           setInterview(mock || {
             id: targetId,
             title: "Practice Interview Session",
             role: "Software Engineer",
-            level: "Junior",
-            score: 85,
+            level: "Practice",
+            score: 0,
             created_at: new Date().toISOString(),
           });
         }
@@ -88,13 +86,39 @@ export default function InterviewResultPage({ params }: ResultPageProps) {
     );
   }
 
-  const feedback = interview?.overall_feedback || interview?.feedback || {
-    score: interview?.score || 85,
-    strengths: ["Strong technical communication", "Clear analytical thinking"],
-    weaknesses: ["Expand on architectural trade-offs and edge cases"],
+  const rawScore =
+    typeof interview?.score === "number"
+      ? interview.score
+      : typeof interview?.overall_feedback?.score === "number"
+      ? interview.overall_feedback.score
+      : typeof interview?.feedback?.score === "number"
+      ? interview.feedback.score
+      : 0;
+
+  const finalScore = Math.min(100, Math.max(0, rawScore));
+
+  const defaultStrengths =
+    finalScore === 0
+      ? ["Attempted the interview session"]
+      : ["Solid technical communication", "Clear analytical thinking"];
+
+  const defaultWeaknesses =
+    finalScore === 0
+      ? ["Questions were skipped or lacked technical content", "Review core fundamentals before retrying"]
+      : ["Expand on architectural trade-offs and edge cases"];
+
+  const feedback = {
+    score: finalScore,
+    strengths:
+      interview?.overall_feedback?.strengths ||
+      interview?.feedback?.strengths ||
+      defaultStrengths,
+    weaknesses:
+      interview?.overall_feedback?.weaknesses ||
+      interview?.feedback?.weaknesses ||
+      defaultWeaknesses,
   };
 
-  const finalScore = typeof feedback.score === "number" ? feedback.score : (interview?.score || 85);
   const badge = getScoreBadgeColor(finalScore);
 
   return (
