@@ -174,6 +174,7 @@ Provide an evaluation as a JSON object matching this schema:
     let candidateName = "Candidate";
 
     if (interviewRow?.user_id) {
+      // 1. Try public.profiles table
       const { data: profileRow } = await supabase
         .from("profiles")
         .select("email, name")
@@ -183,6 +184,17 @@ Provide an evaluation as a JSON object matching this schema:
       if (profileRow?.email) {
         candidateEmail = profileRow.email;
         candidateName = profileRow.name || candidateEmail.split("@")[0];
+      } else {
+        // 2. Try Supabase Auth admin user lookup
+        try {
+          const { data: authUserData } = await supabase.auth.admin.getUserById(interviewRow.user_id);
+          if (authUserData?.user?.email) {
+            candidateEmail = authUserData.user.email;
+            candidateName = authUserData.user.user_metadata?.name || candidateEmail.split("@")[0];
+          }
+        } catch (authErr) {
+          console.warn("Auth admin lookup fallback skipped:", authErr);
+        }
       }
     }
 

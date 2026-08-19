@@ -16,12 +16,17 @@ export default function InterviewSetupForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setIsLoading(true);
     setErrorMsg("");
 
-    try {
-      const selectedRole = role.trim() || "Frontend Developer";
+    const selectedRole = role.trim();
+    if (!selectedRole) {
+      setErrorMsg("Please enter or select a Job Role to start the interview.");
+      return;
+    }
 
+    setIsLoading(true);
+
+    try {
       const res = await createInterviewSession({
         role: selectedRole,
         level,
