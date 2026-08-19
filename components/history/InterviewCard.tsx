@@ -9,7 +9,17 @@ interface InterviewCardProps {
 }
 
 export default function InterviewCard({ interview }: InterviewCardProps) {
-  const score = extractInterviewScore(interview);
+  let score = extractInterviewScore(interview);
+  if (score === 0 && interview) {
+    if (typeof interview.score === "number" && interview.score > 0) {
+      score = interview.score;
+    } else if (typeof (interview as any).overall_feedback?.score === "number" && (interview as any).overall_feedback.score > 0) {
+      score = (interview as any).overall_feedback.score;
+    } else if (typeof (interview as any).feedback?.score === "number" && (interview as any).feedback.score > 0) {
+      score = (interview as any).feedback.score;
+    }
+  }
+
   const badge = getScoreBadgeColor(score);
   const questionCount = interview.questions?.length ?? 5;
 
