@@ -17,11 +17,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, questions: [] });
     }
 
-    const groqModels = [
-      "llama-3.3-70b-versatile",
-      "llama-3.1-8b-instant",
-      "llama3-70b-8192",
-    ];
+    // See the matching note in app/api/evaluate-interview/route.ts — these three
+    // legacy llama model names are decommissioned on Groq and were silently
+    // failing every call, so question generation has been falling back to the
+    // static getFallbackQuestions() templates instead of real Groq output.
+    const groqModels = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"];
 
     const sessionSeed = `${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
 

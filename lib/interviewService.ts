@@ -579,7 +579,10 @@ export async function evaluateInterviewSession({
   ];
 
   if (groqKey) {
-    const groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192"];
+    // See the matching note in app/api/evaluate-interview/route.ts — these three
+    // legacy llama model names are decommissioned on Groq and were silently
+    // failing every call.
+    const groqModels = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"];
     const evaluationPrompt = `You are an Honest and Strict Senior Technical Interviewer evaluating a candidate's interview performance.
 
 Questions and Candidate Answers:

@@ -44,7 +44,12 @@ export async function POST(request: Request) {
     let evaluationResult: any = null;
 
     if (groqKey) {
-      const groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192"];
+      // NOTE: llama-3.3-70b-versatile / llama-3.1-8b-instant / llama3-70b-8192 were
+      // removed/decommissioned on Groq (confirmed via a live API check) and returned
+      // 404/400 on every call, silently falling through to the local heuristic
+      // scorer for every single evaluation. These are the currently-available
+      // instruction-following chat models on Groq's public API as of 2026-08-20.
+      const groqModels = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"];
       const evaluationPrompt = `You are an Honest and Strict Senior Technical Interviewer evaluating a candidate's interview performance.
 
 Questions and Candidate Answers:
